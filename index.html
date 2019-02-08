@@ -1,0 +1,130 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="keywords" content="remark,remarkjs,markdown,slideshow,presentation" />
+    <meta name="description" content="A simple, in-browser, markdown-driven slideshow tool." />
+    <title>Remark</title>
+    <link href="bekk.css" type="text/css" rel="stylesheet">
+    
+  </head>
+  <body>
+<textarea id="source">
+name: inverse
+layout: false
+class: front-page
+#SEGGER RTT
+## Real-time transfer logging over multiple applications
+[ri-mahrk]
+.footnote[Go directly to [project site](https://github.com/gnab/remark)]
+---
+# Short talk
+---
+# Idea
+* Put the SEGGER RTT Block on a fixed location
+* Do lazy initialization of the SEGGER RTT Block
+---
+# Different solutions
+How to make GCC not initialize your buffer
+```C
+static struct segger_cb __attribute__((section (".m_data_20000000")));
+```
+```C
+__no_init struct segger_cb;
+```
+---
+# SEGGER RTT
+Fortunally SEGGER allready has support for sections
+```C
+#if defined(SEGGER_RTT_SECTION) || defined (SEGGER_RTT_BUFFER_SECTION)
+  #if (defined __GNUC__)
+    #define SEGGER_RTT_PUT_SECTION(Var, Section) __attribute__ ((section (Section))) Var
+  #elif (defined __ICCARM__) || (defined __ICCRX__)
+#define SEGGER_RTT_PUT_SECTION(Var, Section) RTT_PRAGMA(location=Section) \
+                                        Var
+  #elif (defined __CC_ARM)
+    #define SEGGER_RTT_PUT_SECTION(Var, Section) __attribute__ ((section (Section), zero_init))  Var
+  #else
+    #error "Section placement not supported for this compiler."
+  #endif
+#else
+  #define SEGGER_RTT_PUT_SECTION(Var, Section) Var
+#endif
+```
+---
+# Add section to build file of RTT and a custom memory seciton
+```Cmake
+if(CONFIG_SEGGER_RTT_USE_LINKER_SECTION)
+	zephyr_compile_definitions(SEGGER_RTT_SECTION=".rtt")
+	zephyr_compile_definitions(SEGGER_RTT_BUFFER_SECTION=".rtt.buffer")
+endif()
+```
+```C
+```
+---
+# Problem
+However they do not do lazy initialization
+```C
+void SEGGER_RTT_Init (void) {
+	_DoInit();
+}
+```
+```C
+static void _DoInit(void) {
+  SEGGER_RTT_CB* p;
+  //
+  // Initialize control block
+  //
+  p = &_SEGGER_RTT;
+  p->MaxNumUpBuffers    = SEGGER_RTT_MAX_NUM_UP_BUFFERS;
+  p->MaxNumDownBuffers  = SEGGER_RTT_MAX_NUM_DOWN_BUFFERS;
+  //
+  // Finish initialization of the control block.
+  // Copy Id string in three steps to make sure "SEGGER RTT" is not found
+  // in initializer memory (usually flash) by J-Link
+  //
+  strcpy(&p->acID[7], "RTT");
+  strcpy(&p->acID[0], "SEGGER");
+  p->acID[6] = ' ';
+}
+```
+---
+# Solution
+```C
+void SEGGER_RTT_Init (void) {
+	lazy_init(); // Could be a macro
+	//_DoInit();
+}
+
+#define LAZY_INIT()  do {                                            \
+  if (!STRNEQUAL(_SEGGER_RTT.acID, "SEGGER RTT", STRLEN("SEGGER RTT"))) { _DoInit(); }  \
+} while (0)
+
+#define STREQUAL(a,b) (strcmp((a),(b)) == 0)
+static void lazy_init(void){
+	SEGGER_RTT_CB* p;
+	p = &_SEGGER_RTT;
+	if(!(STREQUAL(&p->acID[7], "RTT") && STREQUAL(&p->acID[7], "RTT") && p->acID[6] == ' ')){
+		_DoInit();
+	}
+}
+```
+---
+I'll add a commit hash to the presenation 
+
+</textarea>
+    <script src="remark-latest.min.js"></script>
+    <script>
+      var hljs = remark.highlighter.engine;
+    </script>
+    <script src="remark.language.js"></script>
+    <script>
+      var slideshow = remark.create({
+          highlightStyle: 'monokai',
+          highlightLanguage: 'C',
+          ratio: '16:9',
+          highlightLines: true
+        }) ;
+    </script>
+
+ </body>
+</html>

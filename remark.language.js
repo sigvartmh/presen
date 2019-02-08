@@ -1,11 +1,9 @@
-/**
- * Language: remark markdown flavor
- * Author: Ole Petter Bang <olepbang@gmail.com>
- */
+/*
+Language: remark markdown flavor
+Author: Ole Petter Bang <olepbang@gmail.com>
+*/
 
-var hljs = remark.highlighter.engine;
-
-hljs.registerLanguage('remark', function() {
+hljs.registerLanguage('remark', function () {
   return {
     contains: [
       {
